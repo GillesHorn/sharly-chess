@@ -84,7 +84,6 @@ class SQLiteStore(Store):
                 parameters=(key,),
             ) as cursor:
                 row = await cursor.fetchone()
-            await db.commit()
         return int(row[0]) == 1
 
     async def expires_in(self, key: str) -> int | None:
@@ -93,7 +92,6 @@ class SQLiteStore(Store):
                 'SELECT expires_at FROM store where key = ?', parameters=(key,)
             ) as cursor:
                 row = await cursor.fetchone()
-            await db.commit()
         if not row:
             return None
         return int((datetime.fromisoformat(row[0]) - datetime.now()).total_seconds())

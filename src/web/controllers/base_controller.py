@@ -449,7 +449,6 @@ class BaseController(Controller):
                 self.IF_MODIFIED_SINCE_HEADER,
                 request.headers[self.IF_MODIFIED_SINCE_HEADER],
             )
-            logger.debug('if_modified_since=%d', if_modified_since)
             return if_modified_since
         except KeyError:
             return None

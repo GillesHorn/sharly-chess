@@ -10,10 +10,14 @@ import aiosqlite
 from aiosqlitepool import SQLiteConnectionPool
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from litestar import Router
+from litestar.connection import ASGIConnection
 from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.datastructures import CacheControlHeader
 from litestar.events import listener
-from litestar.middleware.session.server_side import ServerSideSessionConfig
+from litestar.middleware.session.server_side import (
+    ServerSideSessionConfig,
+    ServerSideSessionBackend,
+)
 from litestar.static_files import create_static_files_router
 from litestar.status_codes import (
     HTTP_404_NOT_FOUND,
@@ -27,6 +31,7 @@ from litestar.template import TemplateConfig
 from litestar.types import ControllerRouterHandler, Middleware
 
 from common import BASE_DIR, TMP_DIR
+from common.logger import get_logger
 from common.i18n import gettext, ngettext
 from data.input_output import OnlineDataSourceManager
 
@@ -63,6 +68,8 @@ from web.controllers.user.tournament_user_controller import (
     ResultUserController,
 )
 from web.sqlite_store import SQLiteStore
+
+logger = get_logger()
 
 static_files_base_dir = BASE_DIR / 'src/web/static'
 
@@ -257,8 +264,30 @@ session_pool = SQLiteConnectionPool(
 
 stores: dict[str, Store] = {'sessions': SQLiteStore(session_pool)}
 
+
+class CustomSessionBackEnd(ServerSideSessionBackend):
+    def get_session_id(self, connection: ASGIConnection) -> str:
+        session_id = connection.cookies.get(self.config.key)
+        if not session_id or session_id == 'null':
+            session_id = connection.get_session_id()
+            if not session_id:
+                session_id = self.generate_session_id()
+                logger.debug(
+                    'New session - Path: %s, Host: %s, User-Agent: %s, id: %s',
+                    connection.url.path,
+                    connection.headers.get('host'),
+                    connection.headers.get('user-agent'),
+                    session_id,
+                )
+        return session_id
+
+
+class CustomSessionConfig(ServerSideSessionConfig):
+    _backend_class = CustomSessionBackEnd
+
+
 middlewares: Sequence[Middleware] = [
-    ServerSideSessionConfig(
+    CustomSessionConfig(
         key='sharly-chess-session',
         exclude=[
             r'^/static/*',
